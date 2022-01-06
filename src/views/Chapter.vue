@@ -54,6 +54,22 @@
           </div>
           <div class="icon-text">书架</div>
         </div>
+        <div
+          class="tool-icon"
+          :class="{ 'no-point': noPoint }"
+          @click="saveRecord"
+        >
+          <div class="iconfont">
+            &#58957;
+          </div>
+          <div class="icon-text">保存</div>
+        </div>
+        <div class="tool-icon" :class="{ 'no-point': noPoint }" @click="toNew">
+          <div class="iconfont">
+            &#58890;
+          </div>
+          <div class="icon-text">同步</div>
+        </div>
         <div class="tool-icon" :class="{ 'no-point': noPoint }" @click="toTop">
           <div class="iconfont">
             &#58914;
@@ -138,71 +154,108 @@ export default {
     //获取书籍数据
     const that = this;
     let bookUrl = sessionStorage.getItem("bookUrl");
-    let bookName = sessionStorage.getItem("bookName");
-    let chapterIndex = sessionStorage.getItem("chapterIndex") || 0;
     var book = JSON.parse(localStorage.getItem(bookUrl));
-    if (book == null || chapterIndex > 0) {
-      book = {
-        bookName: bookName,
-        bookUrl: bookUrl,
-        index: chapterIndex
-      };
-      localStorage.setItem(bookUrl, JSON.stringify(book));
-    }
-
-    // window.addEventListener keyup 声明函数
-
-    this.func_keyup = function (event) {
-      switch (event.key) {
-        case 'ArrowLeft':
-          event.stopPropagation();
-          event.preventDefault();
-          that.toLastChapter();
-          break;
-        case 'ArrowRight':
-          event.stopPropagation();
-          event.preventDefault();
-          that.toNextChapter();
-          break;
-        case 'ArrowUp':
-          event.stopPropagation();
-          event.preventDefault();
-          if (document.documentElement.scrollTop === 0) {
-            that.$message.warning("已到达页面顶部");
-          } else {
-            jump(0 - document.documentElement.clientHeight + 100);
-          }
-          break;
-        case 'ArrowDown':
-          event.stopPropagation();
-          event.preventDefault();
-          if (document.documentElement.clientHeight + document.documentElement.scrollTop === document.documentElement.scrollHeight) {
-            that.$message.warning("已到达页面底部");
-          } else {
-            jump(document.documentElement.clientHeight - 100);
-          }
-          break;
-      }
-    };
-
-    this.getCatalog(bookUrl).then(
+    this.getBook(bookUrl).then(
       res => {
-        let catalog = res.data.data;
-        book.catalog = catalog;
-        that.$store.commit("setReadingBook", book);
-        var index = that.$store.state.readingBook.index || 0;
-        this.getContent(index);
-        window.addEventListener('keyup', this.func_keyup);
+        let newBook = res.data.data;
+        let bookName = newBook.name;
+        var chapterIndex = 0;
+        var chapterPos = 0;
+        if (newBook.webDurChapterTime > newBook.durChapterTime) {
+          chapterIndex = newBook.webChapterIndex;
+          chapterPos = newBook.webChapterPos;
+        } else {
+          chapterIndex = newBook.durChapterIndex;
+          chapterPos = newBook.durChapterPos;
+        }
+        window.console.log(
+          "getBook webDurChapterTime is " +
+            newBook.webDurChapterTime +
+            " durChapterTime is " +
+            newBook.durChapterTime +
+            " chapterIndex is " +
+            chapterIndex +
+            " chapterPos is " +
+            chapterPos
+        );
+        book = {
+          bookName: bookName,
+          bookUrl: bookUrl,
+          index: chapterIndex,
+          chapterPos: chapterPos
+        };
+        localStorage.setItem(bookUrl, JSON.stringify(book));
+        this.getCatalog(bookUrl);
+        window.addEventListener("scroll", this.handleScroll);
+        window.addEventListener("keyup", function(event) {
+          window.console.log("Event key is " + event.key);
+          let t = new Date().getTime();
+          switch (event.key) {
+            case "ArrowLeft":
+              event.stopPropagation();
+              event.preventDefault();
+              that.toLastChapter();
+              break;
+            case "ArrowRight":
+              event.stopPropagation();
+              event.preventDefault();
+              that.toNextChapter();
+              break;
+            case "ArrowUp":
+              if (t - this.oldT2 > 500) {
+                event.stopPropagation();
+                event.preventDefault();
+                if (document.documentElement.scrollTop === 0) {
+                  that.$message.warning("已到达页面顶部");
+                } else {
+                  jump(0 - document.documentElement.clientHeight + 200);
+                }
+                this.oldT2 = t;
+              }
+              break;
+            case "ArrowDown":
+              if (t - this.oldT2 > 500) {
+                event.stopPropagation();
+                event.preventDefault();
+                if (
+                  document.documentElement.clientHeight +
+                    document.documentElement.scrollTop ===
+                  document.documentElement.scrollHeight
+                ) {
+                  that.$message.warning("已到达页面底部");
+                } else {
+                  jump(document.documentElement.clientHeight - 200);
+                }
+                this.oldT2 = t;
+              }
+              break;
+            case "s":
+              if (t - this.oldT2 > 2000) {
+                that.saveRecord(true);
+                this.oldT2 = t;
+              }
+              break;
+            case "n":
+              if (t - this.oldT2 > 2000) {
+                that.toNew();
+                this.oldT2 = t;
+              }
+              break;
+            case "m":
+              if (t - this.oldT2 > 2000) {
+                that.setBookmark();
+                this.oldT2 = t;
+              }
+              break;
+          }
+        });
       },
       err => {
         that.loading.close();
-        that.$message.error("获取书籍目录失败");
+        that.$message.error("获取书籍失败");
         throw err;
       }
     );
-  },
-  destroyed() {
-    window.removeEventListener('keyup', this.func_keyup);
   },
   watch: {
     chapterName(to) {
@@ -248,6 +301,9 @@ export default {
       content: [],
       noPoint: true,
       isNight: this.$store.state.config.theme == 6,
+      oldY: 0,
+      oldT: new Date().getTime(),
+      oldT2: new Date().getTime(),
       bodyTheme: {
         background: config.themes[this.$store.state.config.theme].body
       },
@@ -317,10 +373,71 @@ export default {
     }
   },
   methods: {
+    handleScroll() {
+      let scrollY = window.scrollY;
+      let t = new Date().getTime();
+      //阅读超过1分钟保存一次阅读进度
+      if (scrollY - this.oldY > 1000 && t - this.oldT > 60000) {
+        this.oldT = t;
+        this.oldY = scrollY;
+        this.saveRecord(false);
+      }
+    },
+    saveRecord(showInfo) {
+      let totalH =
+        document.body.scrollHeight || document.documentElement.scrollHeight;
+      let clientH = window.innerHeight || document.documentElement.clientHeight;
+      let validH = totalH - clientH;
+      let scrollH =
+        document.body.scrollTop || document.documentElement.scrollTop;
+      let index = this.$store.state.readingBook.index;
+      let len = this.$store.state.readingBook.catalog[index].len;
+      let chapterIndex = this.$store.state.readingBook.catalog[index].index;
+      let pos = ((len * scrollH) / validH).toFixed(0);
+      let bookUrl = sessionStorage.getItem("bookUrl");
+      if (pos == null) pos = 0;
+      if (chapterIndex != null) {
+        window.console.log(
+          "saveRecord chapterIndex is " + chapterIndex + " pos is " + pos
+        );
+        Axios.get(
+          "/saveReadRecord?url=" +
+            encodeURIComponent(bookUrl) +
+            "&chapterIndex=" +
+            chapterIndex +
+            "&pos=" +
+            pos
+        );
+        this.$store.state.readingBook.chapterIndex = chapterIndex;
+        this.$store.state.readingBook.chapterPos = pos;
+        this.oldT = new Date().getTime();
+        this.oldY = window.scrollY;
+        if (showInfo) {
+          this.$message.info(
+            "正在保存阅读进度到本地，进度索引为[" + index + "." + pos + "]。"
+          );
+        }
+      }
+    },
+    getBook(bookUrl) {
+      return Axios.get("/getBook?url=" + encodeURIComponent(bookUrl));
+    },
     getCatalog(bookUrl) {
-      return Axios.get(
-          "/getChapterList?url=" +
-          encodeURIComponent(bookUrl)
+      let that = this;
+      Axios.get("/getChapterList?url=" + encodeURIComponent(bookUrl)).then(
+        res => {
+          let catalog = res.data.data;
+          let book = JSON.parse(localStorage.getItem(bookUrl));
+          book.catalog = catalog;
+          that.$store.commit("setReadingBook", book);
+          var index = that.$store.state.readingBook.index || 0;
+          this.getContent(index);
+        },
+        err => {
+          that.loading.close();
+          that.$message.error("获取书籍目录失败");
+          throw err;
+        }
       );
     },
     getContent(index) {
@@ -350,15 +467,37 @@ export default {
       let that = this;
       Axios.get(
         "/getBookContent?url=" +
-          encodeURIComponent(bookUrl) + "&index=" + chapterIndex
+          encodeURIComponent(bookUrl) +
+          "&index=" +
+          chapterIndex
       ).then(
         res => {
           let data = res.data.data;
-          that.content = data.split(/\n+/);
+          this.$store.state.readingBook.catalog[index].len = data.length;
+          let dataArray = data.split("\n\n");
+          let contentData = "";
+          if (dataArray.length > 1) {
+            contentData = dataArray[1].split("\n");
+          } else {
+            contentData = dataArray[0].split("\n");
+          }
+          that.content = contentData;
           this.$store.commit("setContentLoading", true);
           that.loading.close();
           that.noPoint = false;
           that.$store.commit("setShowContent", true);
+          let pos = this.$store.state.readingBook.chapterPos;
+          if (pos > 100) {
+            this.$message.info(
+              "当前章最新进度索引为[" +
+                index +
+                "." +
+                pos +
+                "]，请点击同步跳转阅读"
+            );
+          }
+          this.oldT = new Date().getTime();
+          this.oldY = window.scrollY;
         },
         err => {
           that.$message.error("获取章节内容失败");
@@ -366,6 +505,56 @@ export default {
           throw err;
         }
       );
+    },
+    toNew() {
+      let totalH =
+        document.body.scrollHeight || document.documentElement.scrollHeight;
+      let clientH = window.innerHeight || document.documentElement.clientHeight;
+      let validH = totalH - clientH;
+      let index = this.$store.state.readingBook.index;
+      let len = this.$store.state.readingBook.catalog[index].len;
+      let chapterPos = this.$store.state.readingBook.chapterPos;
+      let scrollH = (validH * chapterPos) / len;
+      document.documentElement.scrollTop = scrollH;
+      /*
+      this.$message.info(
+        "同步阅读进度到最近处，进度索引为[" + index + "." + chapterPos + "]。"
+      );*/
+    },
+    setBookmark() {
+      let that = this;
+      let index = this.$store.state.readingBook.index;
+      let chapterIndex = this.$store.state.readingBook.catalog[index].index;
+      let title = this.$store.state.readingBook.catalog[index].title;
+      let bookUrl = sessionStorage.getItem("bookUrl");
+      let bookText = window
+        .getSelection()
+        .toString()
+        .trim();
+      if (bookText != "") {
+        let pos = title.length + that.content.join("\n").indexOf(bookText);
+        window.console.log(
+          "setBookmark chapterIndex is " +
+            chapterIndex +
+            " chapterPos is " +
+            pos
+        );
+        Axios.get(
+          "/setBookmark?url=" +
+            encodeURIComponent(bookUrl) +
+            "&chapterIndex=" +
+            chapterIndex +
+            "&pos=" +
+            pos +
+            "&bookText=" +
+            bookText
+        );
+        this.$store.state.readingBook.chapterIndex = chapterIndex;
+        this.$store.state.readingBook.chapterPos = pos;
+        this.oldT = new Date().getTime();
+        this.oldY = window.scrollY;
+        this.$message.info("正在保存书签");
+      }
     },
     toTop() {
       jump(this.$refs.top);
@@ -378,7 +567,7 @@ export default {
       let index = this.$store.state.readingBook.index;
       index++;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
-        this.$message.info("下一章");
+        this.$store.state.readingBook.chapterPos = 0;
         this.getContent(index);
       } else {
         this.$message.error("本章是最后一章");
@@ -389,7 +578,7 @@ export default {
       let index = this.$store.state.readingBook.index;
       index--;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
-        this.$message.info("上一章");
+        this.$store.state.readingBook.chapterPos = 0;
         this.getContent(index);
       } else {
         this.$message.error("本章是第一章");
@@ -397,6 +586,7 @@ export default {
     },
     toShelf() {
       this.$router.push("/");
+      this.saveRecord(false);
     }
   }
 };

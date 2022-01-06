@@ -25,7 +25,14 @@
           <el-tag
             type="warning"
             class="recent-book"
-            @click="toDetail(readingRecent.url, readingRecent.name, readingRecent.chapterIndex)"
+            @click="
+              toDetail(
+                readingRecent.url,
+                readingRecent.name,
+                readingRecent.chapterIndex,
+                book.durChapterPos
+              )
+            "
             :class="{ 'no-point': readingRecent.url == '' }"
           >
             {{ readingRecent.name }}
@@ -74,7 +81,12 @@
             <div
               class="info"
               @click="
-                toDetail(book.bookUrl, book.name, book.durChapterIndex)
+                toDetail(
+                  book.bookUrl,
+                  book.name,
+                  book.durChapterIndex,
+                  book.durChapterPos
+                )
               "
             >
               <div class="name">{{ book.name }}</div>
@@ -137,8 +149,8 @@ export default {
         that.$store.commit("setConnectType", "success");
         that.$store.commit("increaseBookNum", response.data.data.length);
         that.$store.commit("addBooks", response.data.data.sort(function (a, b) {
-          var x = a["durChapterTime"] || 0;
-          var y = b["durChapterTime"] || 0;
+          var x = a["webDurChapterTime"] || 0;
+          var y = b["webDurChapterTime"] || 0;
           return y - x;
         }));
         that.$store.commit(
@@ -159,14 +171,16 @@ export default {
   methods: {
     setIP() {
     },
-    toDetail(bookUrl, bookName, chapterIndex) {
+    toDetail(bookUrl, bookName, chapterIndex, chapterPos) {
       sessionStorage.setItem("bookUrl", bookUrl);
       sessionStorage.setItem("bookName", bookName);
       sessionStorage.setItem("chapterIndex", chapterIndex);
+      sessionStorage.setItem("chapterPos", chapterPos);
       this.readingRecent = {
         name: bookName,
         url: bookUrl,
-        chapterIndex: chapterIndex
+        chapterIndex: chapterIndex,
+        chapterPos: chapterIndex
       };
       localStorage.setItem("readingRecent", JSON.stringify(this.readingRecent));
       this.$router.push({
